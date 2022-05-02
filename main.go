@@ -1,91 +1,66 @@
 package main
 
 import (
-        "crypto/sha256"
-        "encoding/json"
-        "fmt"
-        "strconv"
-        "strings"
-        "time"
+	"bytes"
+	"crypto/sha256"
+	"fmt"
 )
 
 type Block struct {
-	data         map[string]interface{}
-	hash         string
-	previousHash string
-	timestamp    time.Time
-	pow          int
+	Hash     []byte
+	Data     []byte
+	PrevHash []byte
 }
 
-type Blockchain struct {
-	genesisBlock Block
-	chain        []Block
-	difficulty   int
+type BlockChain struct {
+	blocks []*Block
 }
 
-func (b Block) calculateHash() string {
-	data, _ := json.Marshal(b.data)
-	blockData := b.previousHash + string(data) + b.timestamp.String() + strconv.Itoa(b.pow)
-	blockHash := sha256.Sum256([]byte(blockData))
-	return fmt.Sprintf("%x", blockHash)
+func (b *Block) DeriveHash() {
+	info := bytes.Join([][]byte{b.Data, b.PrevHash}, []byte{})
+	// This will join our previous block's relevant info with the new blocks
+	hash := sha256.Sum256(info)
+	//This performs the actual hashing algorithm
+	b.Hash = hash[:]
+	//If this ^ doesn't make sense, you can look up slice defaults
 }
-
 
 //mine:
 
-func (b *Block) mine(difficulty int) {
-	for !strings.HasPrefix(b.hash, strings.Repeat("0", difficulty)) {
-			b.pow++
-			b.hash = b.calculateHash()
-	}
-}
-func CreateBlockchain(difficulty int) Blockchain {
-	genesisBlock := Block{
-			hash:      "0",
-			timestamp: time.Now(),
-	}
-	return Blockchain{
-			genesisBlock,
-			[]Block{genesisBlock},
-			difficulty,
-	}
+func CreateBlock(data string, prevHash []byte) *Block {
+	block := &Block{[]byte{}, []byte(data), prevHash}
+	//If this is gibberish to you look up
+	// pointer syntax in go
+	block.DeriveHash()
+	return block
 }
 
-func (b *Blockchain) addBlock(from, to string, amount float64) {
-	blockData := map[string]interface{}{
-			"from":   from,
-			"to":     to,
-			"amount": amount,
-	}
-	lastBlock := b.chain[len(b.chain)-1]
-	newBlock := Block{
-			data:         blockData,
-			previousHash: lastBlock.hash,
-			timestamp:    time.Now(),
-	}
-	newBlock.mine(b.difficulty)
-	b.chain = append(b.chain, newBlock)
+func (chain *BlockChain) AddBlock(data string) {
+	prevBlock := chain.blocks[len(chain.blocks)-1]
+	new := CreateBlock(data, prevBlock.Hash)
+	chain.blocks = append(chain.blocks, new)
 }
 
-func (b Blockchain) isValid() bool {
-	for i := range b.chain[1:] {
-			previousBlock := b.chain[i]
-			currentBlock := b.chain[i+1]
-			if currentBlock.hash != currentBlock.calculateHash() || currentBlock.previousHash != previousBlock.hash {
-					return false
-			}
-	}
-	return true
+func Genesis() *Block {
+	return CreateBlock("Genesis", []byte{})
+}
+
+func InitBlockChain() *BlockChain {
+	return &BlockChain{[]*Block{Genesis()}}
 }
 
 func main() {
-	// create a new blockchain instance with a mining difficulty of 2
-	blockchain := CreateBlockchain(2)
 
-	// record transactions on the blockchain for Alice, Bob, and John
-	blockchain.addBlock("Alice", "Bob", 5)
-	blockchain.addBlock("John", "Bob", 2)
+	chain := InitBlockChain()
 
-	// check if the blockchain is valid; expecting true
-	fmt.Println(blockchain.isValid())
+	chain.AddBlock("first block after genesis")
+	chain.AddBlock("second block after genesis")
+	chain.AddBlock("third block after genesis")
+
+	for _, block := range chain.blocks {
+		fmt.Printf("Previous hash: %x\n", block.PrevHash)
+		fmt.Printf("data: %s\n", block.Data)
+		fmt.Printf("hash: %x\n", block.Hash)
+	}
+
 }
